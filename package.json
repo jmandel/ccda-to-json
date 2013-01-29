@@ -1,0 +1,22 @@
+{
+  "name": "ccda-parser",
+  "version": "0.0.1",
+  "description": "Parse a Consolidate CDA clinical summary document into a simplified JSON structue",
+  "author": "Josh Mandel <joshua.mandel@childrens.harvard.edu>",
+  "scripts":{
+   "browserify": "browserify -e ccda/entry.js -o browser-code/ccda-parser.js"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "async": "*",
+    "libxmljs":"*",
+    "xdate":"*",
+    "optimist":"*",
+		"underscore":"*",
+    "node-uuid": "*",
+    "browserify": "*"
+  },
+  "devDependencies": {
+  },
+  "engine": "node >= 0.6.0"
+}

@@ -20,9 +20,9 @@ npm run-script browserify
 ```
 <html>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js"></script>
-  <script src="ccda-parser.js"></script>
+  <script src="ccda-to-json.js"></script>
   <script>
-    var ccdaParser = require("./index");
+    var ccdaParser = require("ccda-to-json");
     $.get("example.xml").then(function(doc){
       ccdaParser(doc, function(err, result){
         var js = result.toJSON();

@@ -192,7 +192,6 @@ Component.prototype.setJs = function(path, val) {
     hook = hook[parts[i]] || (hook[parts[i]] = {});
   }
   hook[parts[i]] = val;
-
 }
 
 Component.prototype.run = function(node) {

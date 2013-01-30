@@ -3,19 +3,24 @@ var xpath = require("./common").xpath
 var Processor = module.exports = {};
 
 Processor.asString = function(v){
+  var ret;
+
   if (v.text){
-    if (typeof v.text === "string") return v.text;
-    if (typeof v.text === "function") return v.text();
+    if (typeof v.text === "string") ret = v.text;
+    if (typeof v.text === "function") ret = v.text();
   }
-  if (v.value){
-    if (typeof v.value === "string") return v.value;
-    if (typeof v.value === "function") return v.value();
+  else if (v.value){
+    if (typeof v.value === "string") ret = v.value;
+    if (typeof v.value === "function") ret = v.value();
   }
-  if (v.data){
-    if (typeof v.data === "string") return v.data;
-    if (typeof v.data === "function") return v.data();
+  else if (v.data){
+    if (typeof v.data === "string") ret = v.data;
+    if (typeof v.data === "function") ret = v.data();
+  } else {
+    throw "Couldn't find a string value for " + v;
   }
-  throw "Couldn't find a string value for " + v;
+
+  return ret;
 };
 
 Processor.asBoolean = function(v){

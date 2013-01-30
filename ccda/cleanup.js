@@ -12,12 +12,10 @@ Cleanup.clearNulls = function(){
   }
 
   if ('object' === typeof this.js) {
-  console.log("binding this", this);
     var self = this;
     Object.keys(this.js).forEach(function(k) {
-      console.log("bound", this, self);
-      if ((typeof this.js[k] !== 'boolean' && !this.js[k]) || 
-          Array.isArray(this.js[k]) && (this.js[k].length === 0 || this.js[k].filter(function(v){return v && v.js !== undefined && v.js !== null;}).length === 0) || 
+      if ((this.js[k] === null) || 
+          Array.isArray(this.js[k]) && (this.js[k].length === 0 || this.js[k].filter(function(v){return v &&  v.js !== null;}).length === 0) || 
       this.js[k].js === null) {
         delete this.js[k];
       }

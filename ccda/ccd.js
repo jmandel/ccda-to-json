@@ -9,7 +9,7 @@ var Cleanup = require("./cleanup");
 
 Component
   .withNegationStatus(false)
-  .cleanupStep(Cleanup.hideFields(["sourceIds", "_id", "_patient"]), "paredown")
+  .cleanupStep(Cleanup.hideFields(["sourceIds"]), "paredown")
   .cleanupStep(Cleanup.clearNulls, "paredown");
 
 var Identifier = Component.define("Identifier")
@@ -484,27 +484,21 @@ CCDA.prototype.run = function(node){
   return this;
 };
 
-module.exports.import = function(patientId, src, options, callback){
-  if (arguments.length === 3){
+module.exports = function(src, options, callback){
+
+  if (arguments.length === 2){
     callback = options;
     options = {};
   }
 
-  var xml;
+  if(options.hideFields){
+    Component.cleanupStep(Cleanup.hideFields(options.hideFields), "paredown");
+  };
+
+  var patientId = options.patientId || 0;
+  var xml = common.parseXml(src);
   
-  if (process && process.version){
-    xml = require("libxmljs").parseXmlString(src);
-  }
-  else if (typeof src === "string"){
-    var xml = new DOMParser().parseFromString(src, "text/xml");
-  } else if (typeof src === "object" && src.constructor === Document) {
-    var xml = src;
-  } else {
-    throw "Unrecognized document type " + typeof src;
-  }
-
   var ret = new CCDA();
-
   ret.patientId = patientId;
 
   //TODO can we leverage external terminology services
@@ -517,7 +511,6 @@ module.exports.import = function(patientId, src, options, callback){
   ret.cleanupTree(); // first build the data objects up 
   ret.cleanupTree("paredown"); // then pare down to essentials
   callback(null, ret);
-
 };
 
 module.exports.ConceptDescriptor = ConceptDescriptor;

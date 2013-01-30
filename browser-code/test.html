@@ -1,0 +1,23 @@
+<html>
+  <script 
+    src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js">
+  </script>
+  <script src="ccda-parser.js"></script>
+  <script>
+    var ccdaParser = require("./index");
+    $.get("example.xml").then(function(doc){
+      var t0=new Date().getTime();
+      ccdaParser(doc, {
+        hideFields: ["_patient", "_id"]
+      },
+      function(err, result){
+        window.result = result;
+        var js = result.toJSON();
+        console.log("got json in", new Date().getTime()-t0, "ms");
+        $("#result").text(JSON.stringify(js, null, " "));
+      });
+    });
+
+  </script>
+  <textarea class="prettyprint" style="height: 100%; width: 100%" id="result"></textarea>
+</html>

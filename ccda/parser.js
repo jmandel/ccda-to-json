@@ -47,7 +47,6 @@ Parser.prototype.run = function (parentComponent, node) {
     else if (subComponent) {
       return subComponent(match);
     }
-    console.log("last resolrt as string", match, Processor.asString(match));
     return Processor.asString(match);
 
   }, this);
@@ -68,9 +67,6 @@ Parser.prototype.run = function (parentComponent, node) {
   }
 
   parentComponent.setJs(this.jsPath, jsVal);
-  console.log("set parent", this.jsPath, jsVal);
-  if (this.jsPath=="sourceIds" && parentComponent.js.sourceIds.length > 0) {
-  }
 
   return this;
 };

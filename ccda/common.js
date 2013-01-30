@@ -58,7 +58,6 @@ var xpath = function(doc, p, ns){
     }
   }
 
-  console.log(p, r.length, r);
   return r;
 };
 
@@ -82,7 +81,6 @@ function tokenizeDemographics(d){
   });
 
   d.gender && ret.push(d.gender);
-  Object.keys(d.birthTime).forEach(function(k){console.log(k);});
   d.birthTime && ret.push(d.birthTime.toISOString());
 
   ret = ret.map(function(t){
@@ -101,9 +99,27 @@ function patientUri(patientId){
   return publicUri + "/patients/"+patientId;
 };
 
+function parseXml(src){
+  var xml;
+
+  if (process.title === "node"){
+    xml = require("libxmljs").parseXmlString(src);
+  }
+  else if (typeof src === "string"){
+    var xml = new DOMParser().parseFromString(src, "text/xml");
+  } else if (typeof src === "object" && src.constructor === Document) {
+    var xml = src;
+  } else {
+    throw "Unrecognized document type " + typeof src;
+  }
+
+  return xml;
+};
+
 module.exports = {
   deepForEach: deepForEach,
   xpath: xpath,
+  parseXml: parseXml,
   tokenizeDemographics: tokenizeDemographics,
   parseCollectionName: parseCollectionName,
   patientUri: patientUri

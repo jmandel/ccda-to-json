@@ -1,4 +1,4 @@
-(function(){var require = function (file, cwd) {
+var require = function (file, cwd) {
     var resolved = require.resolve(file, cwd || '/');
     var mod = require.modules[resolved];
     if (!mod) throw new Error(
@@ -432,7 +432,14 @@ process.binding = function (name) {
 
 });
 
-require.define("/lib/ccda/ccd.js",function(require,module,exports,__dirname,__filename,process,global){var fs = require("fs");
+require.define("/package.json",function(require,module,exports,__dirname,__filename,process,global){module.exports = {"main":"index.js"}
+});
+
+require.define("/index.js",function(require,module,exports,__dirname,__filename,process,global){module.exports = require("./ccda/ccd");
+
+});
+
+require.define("/ccda/ccd.js",function(require,module,exports,__dirname,__filename,process,global){var fs = require("fs");
 var util = require("util");
 var common = require("./common");
 
@@ -443,7 +450,7 @@ var Cleanup = require("./cleanup");
 
 Component
   .withNegationStatus(false)
-  .cleanupStep(Cleanup.hideFields(["sourceIds", "_id", "_patient"]), "paredown")
+  .cleanupStep(Cleanup.hideFields(["sourceIds"]), "paredown")
   .cleanupStep(Cleanup.clearNulls, "paredown");
 
 var Identifier = Component.define("Identifier")
@@ -918,27 +925,21 @@ CCDA.prototype.run = function(node){
   return this;
 };
 
-module.exports.import = function(patientId, src, options, callback){
-  if (arguments.length === 3){
+module.exports = function(src, options, callback){
+
+  if (arguments.length === 2){
     callback = options;
     options = {};
   }
 
-  var xml;
+  if(options.hideFields){
+    Component.cleanupStep(Cleanup.hideFields(options.hideFields), "paredown");
+  };
+
+  var patientId = options.patientId || 0;
+  var xml = common.parseXml(src);
   
-  if (process && process.version){
-    xml = require("libxmljs").parseXmlString(src);
-  }
-  else if (typeof src === "string"){
-    var xml = new DOMParser().parseFromString(src, "text/xml");
-  } else if (typeof src === "object" && src.constructor === Document) {
-    var xml = src;
-  } else {
-    throw "Unrecognized document type " + typeof src;
-  }
-
   var ret = new CCDA();
-
   ret.patientId = patientId;
 
   //TODO can we leverage external terminology services
@@ -951,7 +952,6 @@ module.exports.import = function(patientId, src, options, callback){
   ret.cleanupTree(); // first build the data objects up 
   ret.cleanupTree("paredown"); // then pare down to essentials
   callback(null, ret);
-
 };
 
 module.exports.ConceptDescriptor = ConceptDescriptor;
@@ -1497,7 +1497,7 @@ EventEmitter.prototype.listeners = function(type) {
 
 });
 
-require.define("/lib/ccda/common.js",function(require,module,exports,__dirname,__filename,process,global){var publicUri = "https://ccda.smartplatforms.org"; // for testing.
+require.define("/ccda/common.js",function(require,module,exports,__dirname,__filename,process,global){var publicUri = "https://ccda.smartplatforms.org"; // for testing.
 
 var isPlainObject = function(o){
   if (o === null) return false;
@@ -1557,7 +1557,6 @@ var xpath = function(doc, p, ns){
     }
   }
 
-  console.log(p, r.length, r);
   return r;
 };
 
@@ -1581,7 +1580,6 @@ function tokenizeDemographics(d){
   });
 
   d.gender && ret.push(d.gender);
-  Object.keys(d.birthTime).forEach(function(k){console.log(k);});
   d.birthTime && ret.push(d.birthTime.toISOString());
 
   ret = ret.map(function(t){
@@ -1600,9 +1598,27 @@ function patientUri(patientId){
   return publicUri + "/patients/"+patientId;
 };
 
+function parseXml(src){
+  var xml;
+
+  if (process.title === "node"){
+    xml = require("libxmljs").parseXmlString(src);
+  }
+  else if (typeof src === "string"){
+    var xml = new DOMParser().parseFromString(src, "text/xml");
+  } else if (typeof src === "object" && src.constructor === Document) {
+    var xml = src;
+  } else {
+    throw "Unrecognized document type " + typeof src;
+  }
+
+  return xml;
+};
+
 module.exports = {
   deepForEach: deepForEach,
   xpath: xpath,
+  parseXml: parseXml,
   tokenizeDemographics: tokenizeDemographics,
   parseCollectionName: parseCollectionName,
   patientUri: patientUri
@@ -1611,82 +1627,437 @@ module.exports = {
 
 });
 
-require.define("/lib/ccda/processor.js",function(require,module,exports,__dirname,__filename,process,global){var XDate = require("xdate");
-var xpath = require("./common").xpath 
-var Processor = module.exports = {};
+require.define("/node_modules/libxmljs/package.json",function(require,module,exports,__dirname,__filename,process,global){module.exports = {"main":"./index"}
+});
 
-Processor.asString = function(v){
-  if (v.text){
-    if (typeof v.text === "string") return v.text;
-    if (typeof v.text === "function") return v.text();
+require.define("/node_modules/libxmljs/index.js",function(require,module,exports,__dirname,__filename,process,global){// js acts as a wrapper to the c++ bindings
+// prefer to do error handling and other abstrctions in the
+// js layer and only go to c++ when we need to hit libxml
+var bindings = require('./lib/bindings');
+
+// document parsing for backwards compat
+var Document = require('./lib/document');
+
+/// parse an xml string and return a Document
+module.exports.parseXml = Document.fromXml;
+
+/// parse an html string and return a Document
+module.exports.parseHtml = Document.fromHtml;
+
+// constants
+module.exports.version = bindings.version;
+module.exports.libxml_version = bindings.libxml_version;
+module.exports.libxml_parser_version = bindings.libxml_parser_version;
+module.exports.libxml_debug_enabled = bindings.libxml_debug_enabled;
+
+// lib exports
+module.exports.Document = Document;
+module.exports.Element = require('./lib/element');
+
+// Compatibility synonyms
+Document.fromXmlString = Document.fromXml;
+Document.fromHtmlString = Document.fromHtmlString;
+module.exports.parseXmlString = module.exports.parseXml;
+module.exports.parseHtmlString = module.exports.parseHtml;
+
+var sax_parser = require('./lib/sax_parser');
+module.exports.SaxParser = sax_parser.SaxParser;
+module.exports.SaxPushParser = sax_parser.SaxPushParser;
+
+
+});
+
+require.define("/node_modules/libxmljs/lib/bindings.js",function(require,module,exports,__dirname,__filename,process,global){module.exports = require('bindings')('libxmljs');
+
+});
+
+require.define("/node_modules/libxmljs/node_modules/bindings/package.json",function(require,module,exports,__dirname,__filename,process,global){module.exports = {"main":"./bindings.js"}
+});
+
+require.define("/node_modules/libxmljs/node_modules/bindings/bindings.js",function(require,module,exports,__dirname,__filename,process,global){
+/**
+ * Module dependencies.
+ */
+
+var fs = require('fs')
+  , path = require('path')
+  , join = path.join
+  , dirname = path.dirname
+  , exists = fs.existsSync || path.existsSync
+  , defaults = {
+        arrow: process.env.NODE_BINDINGS_ARROW || ' → '
+      , compiled: process.env.NODE_BINDINGS_COMPILED_DIR || 'compiled'
+      , platform: process.platform
+      , arch: process.arch
+      , version: process.versions.node
+      , bindings: 'bindings.node'
+      , try: [
+          // node-gyp's linked version in the "build" dir
+          [ 'module_root', 'build', 'bindings' ]
+          // node-waf and gyp_addon (a.k.a node-gyp)
+        , [ 'module_root', 'build', 'Debug', 'bindings' ]
+        , [ 'module_root', 'build', 'Release', 'bindings' ]
+          // Debug files, for development (legacy behavior, remove for node v0.9)
+        , [ 'module_root', 'out', 'Debug', 'bindings' ]
+        , [ 'module_root', 'Debug', 'bindings' ]
+          // Release files, but manually compiled (legacy behavior, remove for node v0.9)
+        , [ 'module_root', 'out', 'Release', 'bindings' ]
+        , [ 'module_root', 'Release', 'bindings' ]
+          // Legacy from node-waf, node <= 0.4.x
+        , [ 'module_root', 'build', 'default', 'bindings' ]
+          // Production "Release" buildtype binary (meh...)
+        , [ 'module_root', 'compiled', 'version', 'platform', 'arch', 'bindings' ]
+        ]
+    }
+
+/**
+ * The main `bindings()` function loads the compiled bindings for a given module.
+ * It uses V8's Error API to determine the parent filename that this function is
+ * being invoked from, which is then used to find the root directory.
+ */
+
+function bindings (opts) {
+
+  // Argument surgery
+  if (typeof opts == 'string') {
+    opts = { bindings: opts }
+  } else if (!opts) {
+    opts = {}
   }
-  if (v.value){
-    if (typeof v.value === "string") return v.value;
-    if (typeof v.value === "function") return v.value();
+  opts.__proto__ = defaults
+
+  // Get the module root
+  if (!opts.module_root) {
+    opts.module_root = exports.getRoot(exports.getFileName())
   }
-  if (v.data){
-    if (typeof v.data === "string") return v.data;
-    if (typeof v.data === "function") return v.data();
+
+  // Ensure the given bindings name ends with .node
+  if (path.extname(opts.bindings) != '.node') {
+    opts.bindings += '.node'
   }
-  throw "Couldn't find a string value for " + v;
+
+  var tries = []
+    , i = 0
+    , l = opts.try.length
+    , n
+
+  for (; i<l; i++) {
+    n = join.apply(null, opts.try[i].map(function (p) {
+      return opts[p] || p
+    }))
+    tries.push(n)
+    try {
+      var b = require(n)
+      b.path = n
+      return b
+    } catch (e) {
+      if (!/not find/i.test(e.message)) {
+        throw e
+      }
+    }
+  }
+
+  var err = new Error('Could not load the bindings file. Tried:\n'
+    + tries.map(function (a) { return opts.arrow + a }).join('\n'))
+  err.tries = tries
+  throw err
+}
+module.exports = exports = bindings
+
+
+/**
+ * Gets the filename of the JavaScript file that invokes this function.
+ * Used to help find the root directory of a module.
+ */
+
+exports.getFileName = function getFileName () {
+  var origPST = Error.prepareStackTrace
+    , dummy = {}
+    , fileName
+
+  Error.prepareStackTrace = function (e, st) {
+    for (var i=0, l=st.length; i<l; i++) {
+      fileName = st[i].getFileName()
+      if (fileName !== __filename) {
+        return
+      }
+    }
+  }
+
+  // run the 'prepareStackTrace' function above
+  Error.captureStackTrace(dummy)
+  dummy.stack
+
+  // cleanup
+  Error.prepareStackTrace = origPST
+
+  return fileName
+}
+
+/**
+ * Gets the root directory of a module, given an arbitrary filename
+ * somewhere in the module tree. The "root directory" is the directory
+ * containing the `package.json` file.
+ *
+ *   In:  /home/nate/node-native-module/lib/index.js
+ *   Out: /home/nate/node-native-module
+ */
+
+exports.getRoot = function getRoot (file) {
+  var dir = dirname(file)
+    , prev
+  while (true) {
+    if (dir === '.') {
+      // Avoids an infinite loop in rare cases, like the REPL
+      dir = process.cwd()
+    }
+    if (exists(join(dir, 'package.json')) || exists(join(dir, 'node_modules'))) {
+      // Found the 'package.json' file or 'node_modules' dir; we're done
+      return dir
+    }
+    if (prev === dir) {
+      // Got to the top
+      throw new Error('Could not find module root given file: "' + file
+                    + '". Do you have a `package.json` file? ')
+    }
+    // Try the parent dir next
+    prev = dir
+    dir = join(dir, '..')
+  }
+}
+
+});
+
+require.define("/node_modules/libxmljs/lib/document.js",function(require,module,exports,__dirname,__filename,process,global){var bindings = require('./bindings');
+
+var Element = require('./element');
+
+/// Create a new document
+/// @param {string} version xml version, default 1.0
+/// @param {string} encoding the encoding, default utf8
+/// @constructor
+var Document = function(version, encoding) {
+    version = version || '1.0';
+    var doc = new bindings.Document(version);
+    doc.encoding(encoding || 'utf8');
+    return doc;
 };
 
-Processor.asBoolean = function(v){
-  var t = Processor.asString(v);
-  return t==='true';
+Document.prototype = bindings.Document.prototype;
+
+/// get or set the root element
+/// if called without any arguments, this will return the document root
+/// @param {Element} [elem] if specified, this will become the new document root
+Document.prototype.root = function(elem) {
+    return this._root(elem);
 };
 
-Processor.asFloat = function(v){
-  return parseFloat(Processor.asString(v));
+/// add a child node to the document
+/// this will set the document root
+Document.prototype.node = function(name, content) {
+    return this.root(Element(this, name, content));
 };
 
-Processor.asTimestamp = function(v){
-  var t = Processor.asString(v);
-
-  var ret = new XDate(0,0,1,0,0,0,0, true); // UTC mode
-  
-  if (t.length >= 4)
-    ret.setFullYear(parseInt(t.slice(0,4)));
-  if (t.length >= 6)
-    ret.setMonth(parseInt(t.slice(4,6))-1);
-  if (t.length >= 8)
-    ret.setDate(parseInt(t.slice(6,8)));
-  if (t.length >= 10)
-    ret.setHours(parseInt(t.slice(8,10)));
-  if (t.length >= 12)
-    ret.setMinutes(parseInt(t.slice(10,12)));
-  if (t.length >= 14)
-    ret.setSeconds(parseInt(t.slice(12,14)));
-  return ret.toDate();
+/// xpath search
+/// @return array of matching elements
+Document.prototype.find = function(xpath, ns_uri) {
+    return this.root().find(xpath, ns_uri);
 };
 
-Processor.asTimestampResolution =  function(v){
-  var t = Processor.asString(v);
-  // TODO handle timezones in dates like 
-  // Error: unexpected timestamp length 19540323000000.000-0600:23
-
-  if (t.length===4)
-    return 'year';
-  if (t.length===6)
-    return 'month';
-  if (t.length===8)
-    return 'day';
-  if (t.length===10)
-    return 'hour';
-  if (t.length===12)
-    return 'minute';
-  if (t.length===14)
-    return 'second';
-
-  return 'subsecond';
+/// xpath search
+/// @return first element matching
+Document.prototype.get = function(xpath, ns_uri) {
+    return this.root().get(xpath, ns_uri);
 };
 
-Processor.pathExists = function(p) {
-  return function(v){
-    var m = xpath(v,p);
-    return (m.length > 0); 
-  };
+/// @return a given child
+Document.prototype.child = function(id) {
+    if (id === undefined || typeof id !== 'number') {
+        throw new Error('id argument required for #child');
+    }
+    return this.root().child(id);
 };
+
+/// @return an Array of child nodes of the document root
+Document.prototype.childNodes = function() {
+    return this.root().childNodes();
+};
+
+/// @return a string representation of the document
+Document.prototype.toString = function() {
+    return this._toString();
+}
+
+/// @return the document version
+Document.prototype.version = function() {
+    return this._version();
+}
+
+/// @return the document encoding
+Document.prototype.encoding = function(encoding) {
+    return this._encoding(encoding);
+}
+
+/// @return whether the XmlDocument is valid
+Document.prototype.validate = function(xsd) {
+    return this._validate(xsd);
+}
+
+/// @return array of namespaces in document
+Document.prototype.namespaces = function() {
+    return this.root().namespaces();
+};
+
+module.exports = Document;
+
+/// parse a string into a html document
+/// @param string html string to parse
+/// @return a Document
+module.exports.fromHtml = function(string) {
+    return bindings.fromHtml(string);
+}
+
+/// parse a string into a xml document
+/// @param string xml string to parse
+/// @return a Document
+module.exports.fromXml = function(string) {
+    return bindings.fromXml(string);
+}
+
+
+});
+
+require.define("/node_modules/libxmljs/lib/element.js",function(require,module,exports,__dirname,__filename,process,global){var bindings = require('./bindings');
+
+var Document = require('./document');
+
+/// create a new element on the given document
+/// @param doc the Document to create the element for
+/// @param name the element name
+/// @param {String} [contenn] element content
+/// @constructor
+var Element = function(doc, name, content) {
+    if (!doc) {
+        throw new Error('document argument required');
+    } else if (! (doc instanceof bindings.Document)) {
+        throw new Error('document argument must be an ' +
+                        'instance of Document');
+    } else if (!name) {
+        throw new Error('name argument required');
+    }
+
+    var elem = new bindings.Element(doc, name, content);
+    return elem;
+};
+
+Element.prototype = bindings.Element.prototype;
+
+Element.prototype.attr = function() {
+    if (arguments.length === 1) {
+        var arg = arguments[0];
+        if (typeof arg === 'object') {
+            // object setter
+            // iterate keys/value to set attributes
+            for (var k in arg) {
+                this._attr(k, arg[k]);
+            };
+            return this;
+        } else if (typeof arg === 'string') {
+            // getter
+            return this._attr(arg);
+        }
+    } else if (arguments.length === 2) {
+        // 2 arg setter
+        var name = arguments[0];
+        var value = arguments[1];
+        this._attr(name, value);
+        return this;
+    }
+};
+
+/// helper method to attach a new node to this element
+/// @param name the element name
+/// @param {String} [content] element content
+Element.prototype.node = function(name, content) {
+    var elem = Element(this.doc(), name, content);
+    this.addChild(elem);
+    return elem;
+};
+
+/// helper method to attach a cdata to this element
+/// @param name the element name
+/// @param {String} [content] element content
+Element.prototype.cdata = function(content) {
+  this.addCData(content);
+  return this;
+};
+
+Element.prototype.get = function() {
+    var res = this.find.apply(this, arguments);
+    if (res instanceof Array) {
+        return res[0];
+    } else {
+        return res;
+    }
+};
+
+Element.prototype.defineNamespace = function(prefix, href) {
+    // if no prefix specified
+    if (!href) {
+        href = prefix;
+        prefix = null;
+    }
+    return new bindings.Namespace(this, prefix, href);
+};
+
+module.exports = Element;
+
+
+});
+
+require.define("/node_modules/libxmljs/lib/sax_parser.js",function(require,module,exports,__dirname,__filename,process,global){var events = require('events');
+var util = require('util');
+
+var bindings = require('./bindings');
+
+var SaxParser = function(callbacks) {
+    var parser = new bindings.SaxParser();
+
+    // attach callbacks
+    for (var callback in callbacks) {
+        parser.on(callback, callbacks[callback]);
+    }
+
+    return parser;
+};
+
+// store existing functions because util.inherits overrides the prototype
+var parseString = bindings.SaxParser.prototype.parseString;
+
+util.inherits(bindings.SaxParser, events.EventEmitter);
+
+bindings.SaxParser.prototype.parseString = parseString;
+
+var SaxPushParser = function(callbacks) {
+    var parser = new bindings.SaxPushParser();
+
+    // attach callbacks
+    for (var callback in callbacks) {
+        parser.on(callback, callbacks[callback]);
+    }
+
+    return parser;
+};
+
+var push = bindings.SaxPushParser.prototype.push;
+
+util.inherits(bindings.SaxPushParser, events.EventEmitter);
+
+bindings.SaxPushParser.prototype.push = push;
+
+module.exports.SaxParser = SaxParser;
+module.exports.SaxPushParser = SaxPushParser;
+
 
 });
 
@@ -2498,7 +2869,7 @@ return XDate;
 
 });
 
-require.define("/lib/ccda/oids.js",function(require,module,exports,__dirname,__filename,process,global){module.exports = OIDs = {
+require.define("/ccda/oids.js",function(require,module,exports,__dirname,__filename,process,global){module.exports = OIDs = {
   "2.16.840.1.113883.11.20.9.19":{
     name: "Problem Status",
     table:{
@@ -2658,7 +3029,7 @@ require.define("/lib/ccda/oids.js",function(require,module,exports,__dirname,__f
 
 });
 
-require.define("/lib/ccda/component.js",function(require,module,exports,__dirname,__filename,process,global){var util = require("util");
+require.define("/ccda/component.js",function(require,module,exports,__dirname,__filename,process,global){var util = require("util");
 var common = require("./common");
 var assert = require("assert");
 var Parser = require("./parser");
@@ -2852,7 +3223,6 @@ Component.prototype.setJs = function(path, val) {
     hook = hook[parts[i]] || (hook[parts[i]] = {});
   }
   hook[parts[i]] = val;
-
 }
 
 Component.prototype.run = function(node) {
@@ -4690,7 +5060,7 @@ exports.writeIEEE754 = function(buffer, value, offset, isBE, mLen, nBytes) {
 
 });
 
-require.define("/lib/ccda/parser.js",function(require,module,exports,__dirname,__filename,process,global){var Processor = require("./processor");
+require.define("/ccda/parser.js",function(require,module,exports,__dirname,__filename,process,global){var Processor = require("./processor");
 var common = require("./common");
 var xpath = common.xpath;
 
@@ -4739,7 +5109,6 @@ Parser.prototype.run = function (parentComponent, node) {
     else if (subComponent) {
       return subComponent(match);
     }
-    console.log("last resolrt as string", match, Processor.asString(match));
     return Processor.asString(match);
 
   }, this);
@@ -4760,9 +5129,6 @@ Parser.prototype.run = function (parentComponent, node) {
   }
 
   parentComponent.setJs(this.jsPath, jsVal);
-  console.log("set parent", this.jsPath, jsVal);
-  if (this.jsPath=="sourceIds" && parentComponent.js.sourceIds.length > 0) {
-  }
 
   return this;
 };
@@ -4771,7 +5137,7 @@ module.exports = Parser;
 
 });
 
-require.define("/lib/ccda/cleanup.js",function(require,module,exports,__dirname,__filename,process,global){var uuid = require('node-uuid');
+require.define("/ccda/cleanup.js",function(require,module,exports,__dirname,__filename,process,global){var uuid = require('node-uuid');
 var common = require("./common");
 var Processor = require("./processor");
 var OIDs = require("./oids");
@@ -4785,12 +5151,10 @@ Cleanup.clearNulls = function(){
   }
 
   if ('object' === typeof this.js) {
-  console.log("binding this", this);
     var self = this;
     Object.keys(this.js).forEach(function(k) {
-      console.log("bound", this, self);
-      if ((typeof this.js[k] !== 'boolean' && !this.js[k]) || 
-          Array.isArray(this.js[k]) && (this.js[k].length === 0 || this.js[k].filter(function(v){return v && v.js !== undefined && v.js !== null;}).length === 0) || 
+      if ((this.js[k] === null) || 
+          Array.isArray(this.js[k]) && (this.js[k].length === 0 || this.js[k].filter(function(v){return v &&  v.js !== null;}).length === 0) || 
       this.js[k].js === null) {
         delete this.js[k];
       }
@@ -7163,445 +7527,86 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
 
 });
 
-require.define("/node_modules/libxmljs/package.json",function(require,module,exports,__dirname,__filename,process,global){module.exports = {"main":"./index"}
-});
+require.define("/ccda/processor.js",function(require,module,exports,__dirname,__filename,process,global){var XDate = require("xdate");
+var xpath = require("./common").xpath 
+var Processor = module.exports = {};
 
-require.define("/node_modules/libxmljs/index.js",function(require,module,exports,__dirname,__filename,process,global){// js acts as a wrapper to the c++ bindings
-// prefer to do error handling and other abstrctions in the
-// js layer and only go to c++ when we need to hit libxml
-var bindings = require('./lib/bindings');
+Processor.asString = function(v){
+  var ret;
 
-// document parsing for backwards compat
-var Document = require('./lib/document');
-
-/// parse an xml string and return a Document
-module.exports.parseXml = Document.fromXml;
-
-/// parse an html string and return a Document
-module.exports.parseHtml = Document.fromHtml;
-
-// constants
-module.exports.version = bindings.version;
-module.exports.libxml_version = bindings.libxml_version;
-module.exports.libxml_parser_version = bindings.libxml_parser_version;
-module.exports.libxml_debug_enabled = bindings.libxml_debug_enabled;
-
-// lib exports
-module.exports.Document = Document;
-module.exports.Element = require('./lib/element');
-
-// Compatibility synonyms
-Document.fromXmlString = Document.fromXml;
-Document.fromHtmlString = Document.fromHtmlString;
-module.exports.parseXmlString = module.exports.parseXml;
-module.exports.parseHtmlString = module.exports.parseHtml;
-
-var sax_parser = require('./lib/sax_parser');
-module.exports.SaxParser = sax_parser.SaxParser;
-module.exports.SaxPushParser = sax_parser.SaxPushParser;
-
-
-});
-
-require.define("/node_modules/libxmljs/lib/bindings.js",function(require,module,exports,__dirname,__filename,process,global){module.exports = require('bindings')('libxmljs');
-
-});
-
-require.define("/node_modules/libxmljs/node_modules/bindings/package.json",function(require,module,exports,__dirname,__filename,process,global){module.exports = {"main":"./bindings.js"}
-});
-
-require.define("/node_modules/libxmljs/node_modules/bindings/bindings.js",function(require,module,exports,__dirname,__filename,process,global){
-/**
- * Module dependencies.
- */
-
-var fs = require('fs')
-  , path = require('path')
-  , join = path.join
-  , dirname = path.dirname
-  , exists = fs.existsSync || path.existsSync
-  , defaults = {
-        arrow: process.env.NODE_BINDINGS_ARROW || ' → '
-      , compiled: process.env.NODE_BINDINGS_COMPILED_DIR || 'compiled'
-      , platform: process.platform
-      , arch: process.arch
-      , version: process.versions.node
-      , bindings: 'bindings.node'
-      , try: [
-          // node-gyp's linked version in the "build" dir
-          [ 'module_root', 'build', 'bindings' ]
-          // node-waf and gyp_addon (a.k.a node-gyp)
-        , [ 'module_root', 'build', 'Debug', 'bindings' ]
-        , [ 'module_root', 'build', 'Release', 'bindings' ]
-          // Debug files, for development (legacy behavior, remove for node v0.9)
-        , [ 'module_root', 'out', 'Debug', 'bindings' ]
-        , [ 'module_root', 'Debug', 'bindings' ]
-          // Release files, but manually compiled (legacy behavior, remove for node v0.9)
-        , [ 'module_root', 'out', 'Release', 'bindings' ]
-        , [ 'module_root', 'Release', 'bindings' ]
-          // Legacy from node-waf, node <= 0.4.x
-        , [ 'module_root', 'build', 'default', 'bindings' ]
-          // Production "Release" buildtype binary (meh...)
-        , [ 'module_root', 'compiled', 'version', 'platform', 'arch', 'bindings' ]
-        ]
-    }
-
-/**
- * The main `bindings()` function loads the compiled bindings for a given module.
- * It uses V8's Error API to determine the parent filename that this function is
- * being invoked from, which is then used to find the root directory.
- */
-
-function bindings (opts) {
-
-  // Argument surgery
-  if (typeof opts == 'string') {
-    opts = { bindings: opts }
-  } else if (!opts) {
-    opts = {}
+  if (v.text){
+    if (typeof v.text === "string") ret = v.text;
+    if (typeof v.text === "function") ret = v.text();
   }
-  opts.__proto__ = defaults
-
-  // Get the module root
-  if (!opts.module_root) {
-    opts.module_root = exports.getRoot(exports.getFileName())
+  else if (v.value){
+    if (typeof v.value === "string") ret = v.value;
+    if (typeof v.value === "function") ret = v.value();
+  }
+  else if (v.data){
+    if (typeof v.data === "string") ret = v.data;
+    if (typeof v.data === "function") ret = v.data();
+  } else {
+    throw "Couldn't find a string value for " + v;
   }
 
-  // Ensure the given bindings name ends with .node
-  if (path.extname(opts.bindings) != '.node') {
-    opts.bindings += '.node'
-  }
+  return ret;
+};
 
-  var tries = []
-    , i = 0
-    , l = opts.try.length
-    , n
+Processor.asBoolean = function(v){
+  var t = Processor.asString(v);
+  return t==='true';
+};
 
-  for (; i<l; i++) {
-    n = join.apply(null, opts.try[i].map(function (p) {
-      return opts[p] || p
-    }))
-    tries.push(n)
-    try {
-      var b = require(n)
-      b.path = n
-      return b
-    } catch (e) {
-      if (!/not find/i.test(e.message)) {
-        throw e
-      }
-    }
-  }
+Processor.asFloat = function(v){
+  return parseFloat(Processor.asString(v));
+};
 
-  var err = new Error('Could not load the bindings file. Tried:\n'
-    + tries.map(function (a) { return opts.arrow + a }).join('\n'))
-  err.tries = tries
-  throw err
-}
-module.exports = exports = bindings
+Processor.asTimestamp = function(v){
+  var t = Processor.asString(v);
 
+  var ret = new XDate(0,0,1,0,0,0,0, true); // UTC mode
+  
+  if (t.length >= 4)
+    ret.setFullYear(parseInt(t.slice(0,4)));
+  if (t.length >= 6)
+    ret.setMonth(parseInt(t.slice(4,6))-1);
+  if (t.length >= 8)
+    ret.setDate(parseInt(t.slice(6,8)));
+  if (t.length >= 10)
+    ret.setHours(parseInt(t.slice(8,10)));
+  if (t.length >= 12)
+    ret.setMinutes(parseInt(t.slice(10,12)));
+  if (t.length >= 14)
+    ret.setSeconds(parseInt(t.slice(12,14)));
+  return ret.toDate();
+};
 
-/**
- * Gets the filename of the JavaScript file that invokes this function.
- * Used to help find the root directory of a module.
- */
+Processor.asTimestampResolution =  function(v){
+  var t = Processor.asString(v);
+  // TODO handle timezones in dates like 
+  // Error: unexpected timestamp length 19540323000000.000-0600:23
 
-exports.getFileName = function getFileName () {
-  var origPST = Error.prepareStackTrace
-    , dummy = {}
-    , fileName
+  if (t.length===4)
+    return 'year';
+  if (t.length===6)
+    return 'month';
+  if (t.length===8)
+    return 'day';
+  if (t.length===10)
+    return 'hour';
+  if (t.length===12)
+    return 'minute';
+  if (t.length===14)
+    return 'second';
 
-  Error.prepareStackTrace = function (e, st) {
-    for (var i=0, l=st.length; i<l; i++) {
-      fileName = st[i].getFileName()
-      if (fileName !== __filename) {
-        return
-      }
-    }
-  }
+  return 'subsecond';
+};
 
-  // run the 'prepareStackTrace' function above
-  Error.captureStackTrace(dummy)
-  dummy.stack
-
-  // cleanup
-  Error.prepareStackTrace = origPST
-
-  return fileName
-}
-
-/**
- * Gets the root directory of a module, given an arbitrary filename
- * somewhere in the module tree. The "root directory" is the directory
- * containing the `package.json` file.
- *
- *   In:  /home/nate/node-native-module/lib/index.js
- *   Out: /home/nate/node-native-module
- */
-
-exports.getRoot = function getRoot (file) {
-  var dir = dirname(file)
-    , prev
-  while (true) {
-    if (dir === '.') {
-      // Avoids an infinite loop in rare cases, like the REPL
-      dir = process.cwd()
-    }
-    if (exists(join(dir, 'package.json')) || exists(join(dir, 'node_modules'))) {
-      // Found the 'package.json' file or 'node_modules' dir; we're done
-      return dir
-    }
-    if (prev === dir) {
-      // Got to the top
-      throw new Error('Could not find module root given file: "' + file
-                    + '". Do you have a `package.json` file? ')
-    }
-    // Try the parent dir next
-    prev = dir
-    dir = join(dir, '..')
-  }
-}
+Processor.pathExists = function(p) {
+  return function(v){
+    var m = xpath(v,p);
+    return (m.length > 0); 
+  };
+};
 
 });
-
-require.define("/node_modules/libxmljs/lib/document.js",function(require,module,exports,__dirname,__filename,process,global){var bindings = require('./bindings');
-
-var Element = require('./element');
-
-/// Create a new document
-/// @param {string} version xml version, default 1.0
-/// @param {string} encoding the encoding, default utf8
-/// @constructor
-var Document = function(version, encoding) {
-    version = version || '1.0';
-    var doc = new bindings.Document(version);
-    doc.encoding(encoding || 'utf8');
-    return doc;
-};
-
-Document.prototype = bindings.Document.prototype;
-
-/// get or set the root element
-/// if called without any arguments, this will return the document root
-/// @param {Element} [elem] if specified, this will become the new document root
-Document.prototype.root = function(elem) {
-    return this._root(elem);
-};
-
-/// add a child node to the document
-/// this will set the document root
-Document.prototype.node = function(name, content) {
-    return this.root(Element(this, name, content));
-};
-
-/// xpath search
-/// @return array of matching elements
-Document.prototype.find = function(xpath, ns_uri) {
-    return this.root().find(xpath, ns_uri);
-};
-
-/// xpath search
-/// @return first element matching
-Document.prototype.get = function(xpath, ns_uri) {
-    return this.root().get(xpath, ns_uri);
-};
-
-/// @return a given child
-Document.prototype.child = function(id) {
-    if (id === undefined || typeof id !== 'number') {
-        throw new Error('id argument required for #child');
-    }
-    return this.root().child(id);
-};
-
-/// @return an Array of child nodes of the document root
-Document.prototype.childNodes = function() {
-    return this.root().childNodes();
-};
-
-/// @return a string representation of the document
-Document.prototype.toString = function() {
-    return this._toString();
-}
-
-/// @return the document version
-Document.prototype.version = function() {
-    return this._version();
-}
-
-/// @return the document encoding
-Document.prototype.encoding = function(encoding) {
-    return this._encoding(encoding);
-}
-
-/// @return whether the XmlDocument is valid
-Document.prototype.validate = function(xsd) {
-    return this._validate(xsd);
-}
-
-/// @return array of namespaces in document
-Document.prototype.namespaces = function() {
-    return this.root().namespaces();
-};
-
-module.exports = Document;
-
-/// parse a string into a html document
-/// @param string html string to parse
-/// @return a Document
-module.exports.fromHtml = function(string) {
-    return bindings.fromHtml(string);
-}
-
-/// parse a string into a xml document
-/// @param string xml string to parse
-/// @return a Document
-module.exports.fromXml = function(string) {
-    return bindings.fromXml(string);
-}
-
-
-});
-
-require.define("/node_modules/libxmljs/lib/element.js",function(require,module,exports,__dirname,__filename,process,global){var bindings = require('./bindings');
-
-var Document = require('./document');
-
-/// create a new element on the given document
-/// @param doc the Document to create the element for
-/// @param name the element name
-/// @param {String} [contenn] element content
-/// @constructor
-var Element = function(doc, name, content) {
-    if (!doc) {
-        throw new Error('document argument required');
-    } else if (! (doc instanceof bindings.Document)) {
-        throw new Error('document argument must be an ' +
-                        'instance of Document');
-    } else if (!name) {
-        throw new Error('name argument required');
-    }
-
-    var elem = new bindings.Element(doc, name, content);
-    return elem;
-};
-
-Element.prototype = bindings.Element.prototype;
-
-Element.prototype.attr = function() {
-    if (arguments.length === 1) {
-        var arg = arguments[0];
-        if (typeof arg === 'object') {
-            // object setter
-            // iterate keys/value to set attributes
-            for (var k in arg) {
-                this._attr(k, arg[k]);
-            };
-            return this;
-        } else if (typeof arg === 'string') {
-            // getter
-            return this._attr(arg);
-        }
-    } else if (arguments.length === 2) {
-        // 2 arg setter
-        var name = arguments[0];
-        var value = arguments[1];
-        this._attr(name, value);
-        return this;
-    }
-};
-
-/// helper method to attach a new node to this element
-/// @param name the element name
-/// @param {String} [content] element content
-Element.prototype.node = function(name, content) {
-    var elem = Element(this.doc(), name, content);
-    this.addChild(elem);
-    return elem;
-};
-
-/// helper method to attach a cdata to this element
-/// @param name the element name
-/// @param {String} [content] element content
-Element.prototype.cdata = function(content) {
-  this.addCData(content);
-  return this;
-};
-
-Element.prototype.get = function() {
-    var res = this.find.apply(this, arguments);
-    if (res instanceof Array) {
-        return res[0];
-    } else {
-        return res;
-    }
-};
-
-Element.prototype.defineNamespace = function(prefix, href) {
-    // if no prefix specified
-    if (!href) {
-        href = prefix;
-        prefix = null;
-    }
-    return new bindings.Namespace(this, prefix, href);
-};
-
-module.exports = Element;
-
-
-});
-
-require.define("/node_modules/libxmljs/lib/sax_parser.js",function(require,module,exports,__dirname,__filename,process,global){var events = require('events');
-var util = require('util');
-
-var bindings = require('./bindings');
-
-var SaxParser = function(callbacks) {
-    var parser = new bindings.SaxParser();
-
-    // attach callbacks
-    for (var callback in callbacks) {
-        parser.on(callback, callbacks[callback]);
-    }
-
-    return parser;
-};
-
-// store existing functions because util.inherits overrides the prototype
-var parseString = bindings.SaxParser.prototype.parseString;
-
-util.inherits(bindings.SaxParser, events.EventEmitter);
-
-bindings.SaxParser.prototype.parseString = parseString;
-
-var SaxPushParser = function(callbacks) {
-    var parser = new bindings.SaxPushParser();
-
-    // attach callbacks
-    for (var callback in callbacks) {
-        parser.on(callback, callbacks[callback]);
-    }
-
-    return parser;
-};
-
-var push = bindings.SaxPushParser.prototype.push;
-
-util.inherits(bindings.SaxPushParser, events.EventEmitter);
-
-bindings.SaxPushParser.prototype.push = push;
-
-module.exports.SaxParser = SaxParser;
-module.exports.SaxPushParser = SaxPushParser;
-
-
-});
-
-require.define("/lib/ccda/entry.js",function(require,module,exports,__dirname,__filename,process,global){var ccda = require("./ccd");
-window.ccda = ccda;
-
-
-
-});
-require("/lib/ccda/entry.js");
-})();

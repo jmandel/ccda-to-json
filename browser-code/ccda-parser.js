@@ -2061,6 +2061,90 @@ module.exports.SaxPushParser = SaxPushParser;
 
 });
 
+require.define("/ccda/processor.js",function(require,module,exports,__dirname,__filename,process,global){var XDate = require("xdate");
+var xpath = require("./common").xpath 
+var Processor = module.exports = {};
+
+Processor.asString = function(v){
+  var ret;
+
+  if (v.text){
+    if (typeof v.text === "string") ret = v.text;
+    if (typeof v.text === "function") ret = v.text();
+  }
+  else if (v.value){
+    if (typeof v.value === "string") ret = v.value;
+    if (typeof v.value === "function") ret = v.value();
+  }
+  else if (v.data){
+    if (typeof v.data === "string") ret = v.data;
+    if (typeof v.data === "function") ret = v.data();
+  } else {
+    throw "Couldn't find a string value for " + v;
+  }
+
+  return ret;
+};
+
+Processor.asBoolean = function(v){
+  var t = Processor.asString(v);
+  return t==='true';
+};
+
+Processor.asFloat = function(v){
+  return parseFloat(Processor.asString(v));
+};
+
+Processor.asTimestamp = function(v){
+  var t = Processor.asString(v);
+
+  var ret = new XDate(0,0,1,0,0,0,0, true); // UTC mode
+  
+  if (t.length >= 4)
+    ret.setFullYear(parseInt(t.slice(0,4)));
+  if (t.length >= 6)
+    ret.setMonth(parseInt(t.slice(4,6))-1);
+  if (t.length >= 8)
+    ret.setDate(parseInt(t.slice(6,8)));
+  if (t.length >= 10)
+    ret.setHours(parseInt(t.slice(8,10)));
+  if (t.length >= 12)
+    ret.setMinutes(parseInt(t.slice(10,12)));
+  if (t.length >= 14)
+    ret.setSeconds(parseInt(t.slice(12,14)));
+  return ret.toDate();
+};
+
+Processor.asTimestampResolution =  function(v){
+  var t = Processor.asString(v);
+  // TODO handle timezones in dates like 
+  // Error: unexpected timestamp length 19540323000000.000-0600:23
+
+  if (t.length===4)
+    return 'year';
+  if (t.length===6)
+    return 'month';
+  if (t.length===8)
+    return 'day';
+  if (t.length===10)
+    return 'hour';
+  if (t.length===12)
+    return 'minute';
+  if (t.length===14)
+    return 'second';
+
+  return 'subsecond';
+};
+
+Processor.pathExists = function(p) {
+  return function(v){
+    var m = xpath(v,p);
+    return (m.length > 0); 
+  };
+};
+
+});
+
 require.define("/node_modules/xdate/package.json",function(require,module,exports,__dirname,__filename,process,global){module.exports = {"main":"./src/xdate.js"}
 });
 
@@ -6303,9 +6387,9 @@ exports.any_md5 = any_md5;
 require.define("/node_modules/underscore/package.json",function(require,module,exports,__dirname,__filename,process,global){module.exports = {"main":"underscore.js"}
 });
 
-require.define("/node_modules/underscore/underscore.js",function(require,module,exports,__dirname,__filename,process,global){//     Underscore.js 1.4.3
+require.define("/node_modules/underscore/underscore.js",function(require,module,exports,__dirname,__filename,process,global){//     Underscore.js 1.4.4
 //     http://underscorejs.org
-//     (c) 2009-2012 Jeremy Ashkenas, DocumentCloud Inc.
+//     (c) 2009-2013 Jeremy Ashkenas, DocumentCloud Inc.
 //     Underscore may be freely distributed under the MIT license.
 
 (function() {
@@ -6369,7 +6453,7 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
   }
 
   // Current version.
-  _.VERSION = '1.4.3';
+  _.VERSION = '1.4.4';
 
   // Collection Functions
   // --------------------
@@ -6529,8 +6613,9 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
   // Invoke a method (with arguments) on every item in a collection.
   _.invoke = function(obj, method) {
     var args = slice.call(arguments, 2);
+    var isFunc = _.isFunction(method);
     return _.map(obj, function(value) {
-      return (_.isFunction(method) ? method : value[method]).apply(value, args);
+      return (isFunc ? method : value[method]).apply(value, args);
     });
   };
 
@@ -6540,15 +6625,21 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
   };
 
   // Convenience version of a common use case of `filter`: selecting only objects
-  // with specific `key:value` pairs.
-  _.where = function(obj, attrs) {
-    if (_.isEmpty(attrs)) return [];
-    return _.filter(obj, function(value) {
+  // containing specific `key:value` pairs.
+  _.where = function(obj, attrs, first) {
+    if (_.isEmpty(attrs)) return first ? null : [];
+    return _[first ? 'find' : 'filter'](obj, function(value) {
       for (var key in attrs) {
         if (attrs[key] !== value[key]) return false;
       }
       return true;
     });
+  };
+
+  // Convenience version of a common use case of `find`: getting the first object
+  // containing specific `key:value` pairs.
+  _.findWhere = function(obj, attrs) {
+    return _.where(obj, attrs, true);
   };
 
   // Return the maximum element or (element-based computation).
@@ -6872,26 +6963,23 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
   // Function (ahem) Functions
   // ------------------
 
-  // Reusable constructor function for prototype setting.
-  var ctor = function(){};
-
   // Create a function bound to a given object (assigning `this`, and arguments,
-  // optionally). Binding with arguments is also known as `curry`.
-  // Delegates to **ECMAScript 5**'s native `Function.bind` if available.
-  // We check for `func.bind` first, to fail fast when `func` is undefined.
+  // optionally). Delegates to **ECMAScript 5**'s native `Function.bind` if
+  // available.
   _.bind = function(func, context) {
-    var args, bound;
     if (func.bind === nativeBind && nativeBind) return nativeBind.apply(func, slice.call(arguments, 1));
-    if (!_.isFunction(func)) throw new TypeError;
-    args = slice.call(arguments, 2);
-    return bound = function() {
-      if (!(this instanceof bound)) return func.apply(context, args.concat(slice.call(arguments)));
-      ctor.prototype = func.prototype;
-      var self = new ctor;
-      ctor.prototype = null;
-      var result = func.apply(self, args.concat(slice.call(arguments)));
-      if (Object(result) === result) return result;
-      return self;
+    var args = slice.call(arguments, 2);
+    return function() {
+      return func.apply(context, args.concat(slice.call(arguments)));
+    };
+  };
+
+  // Partially apply a function by creating a version that has had some of its
+  // arguments pre-filled, without changing its dynamic `this` context.
+  _.partial = function(func) {
+    var args = slice.call(arguments, 1);
+    return function() {
+      return func.apply(this, args.concat(slice.call(arguments)));
     };
   };
 
@@ -6899,7 +6987,7 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
   // all callbacks defined on an object belong to it.
   _.bindAll = function(obj) {
     var funcs = slice.call(arguments, 1);
-    if (funcs.length == 0) funcs = _.functions(obj);
+    if (funcs.length === 0) funcs = _.functions(obj);
     each(funcs, function(f) { obj[f] = _.bind(obj[f], obj); });
     return obj;
   };
@@ -7324,7 +7412,7 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
       max = min;
       min = 0;
     }
-    return min + (0 | Math.random() * (max - min + 1));
+    return min + Math.floor(Math.random() * (max - min + 1));
   };
 
   // List of HTML entities for escaping.
@@ -7380,7 +7468,7 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
   // Useful for temporary DOM ids.
   var idCounter = 0;
   _.uniqueId = function(prefix) {
-    var id = '' + ++idCounter;
+    var id = ++idCounter + '';
     return prefix ? prefix + id : id;
   };
 
@@ -7415,6 +7503,7 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
   // Underscore templating handles arbitrary delimiters, preserves whitespace,
   // and correctly escapes quotes within interpolated code.
   _.template = function(text, data, settings) {
+    var render;
     settings = _.defaults({}, settings, _.templateSettings);
 
     // Combine delimiters into one regular expression via alternation.
@@ -7453,7 +7542,7 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
       source + "return __p;\n";
 
     try {
-      var render = new Function(settings.variable || 'obj', '_', source);
+      render = new Function(settings.variable || 'obj', '_', source);
     } catch (e) {
       e.source = source;
       throw e;
@@ -7524,89 +7613,5 @@ require.define("/node_modules/underscore/underscore.js",function(require,module,
   });
 
 }).call(this);
-
-});
-
-require.define("/ccda/processor.js",function(require,module,exports,__dirname,__filename,process,global){var XDate = require("xdate");
-var xpath = require("./common").xpath 
-var Processor = module.exports = {};
-
-Processor.asString = function(v){
-  var ret;
-
-  if (v.text){
-    if (typeof v.text === "string") ret = v.text;
-    if (typeof v.text === "function") ret = v.text();
-  }
-  else if (v.value){
-    if (typeof v.value === "string") ret = v.value;
-    if (typeof v.value === "function") ret = v.value();
-  }
-  else if (v.data){
-    if (typeof v.data === "string") ret = v.data;
-    if (typeof v.data === "function") ret = v.data();
-  } else {
-    throw "Couldn't find a string value for " + v;
-  }
-
-  return ret;
-};
-
-Processor.asBoolean = function(v){
-  var t = Processor.asString(v);
-  return t==='true';
-};
-
-Processor.asFloat = function(v){
-  return parseFloat(Processor.asString(v));
-};
-
-Processor.asTimestamp = function(v){
-  var t = Processor.asString(v);
-
-  var ret = new XDate(0,0,1,0,0,0,0, true); // UTC mode
-  
-  if (t.length >= 4)
-    ret.setFullYear(parseInt(t.slice(0,4)));
-  if (t.length >= 6)
-    ret.setMonth(parseInt(t.slice(4,6))-1);
-  if (t.length >= 8)
-    ret.setDate(parseInt(t.slice(6,8)));
-  if (t.length >= 10)
-    ret.setHours(parseInt(t.slice(8,10)));
-  if (t.length >= 12)
-    ret.setMinutes(parseInt(t.slice(10,12)));
-  if (t.length >= 14)
-    ret.setSeconds(parseInt(t.slice(12,14)));
-  return ret.toDate();
-};
-
-Processor.asTimestampResolution =  function(v){
-  var t = Processor.asString(v);
-  // TODO handle timezones in dates like 
-  // Error: unexpected timestamp length 19540323000000.000-0600:23
-
-  if (t.length===4)
-    return 'year';
-  if (t.length===6)
-    return 'month';
-  if (t.length===8)
-    return 'day';
-  if (t.length===10)
-    return 'hour';
-  if (t.length===12)
-    return 'minute';
-  if (t.length===14)
-    return 'second';
-
-  return 'subsecond';
-};
-
-Processor.pathExists = function(p) {
-  return function(v){
-    var m = xpath(v,p);
-    return (m.length > 0); 
-  };
-};
 
 });

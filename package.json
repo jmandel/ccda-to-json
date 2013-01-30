@@ -4,7 +4,7 @@
   "description": "Parse a Consolidate CDA clinical summary document into a simplified JSON structue",
   "author": "Josh Mandel <joshua.mandel@childrens.harvard.edu>",
   "scripts":{
-   "browserify": "browserify -e ccda/entry.js -o browser-code/ccda-parser.js"
+     "browserify": "browserify -r ./index.js -o browser-code/ccda-parser.js"
   },
   "main": "index.js",
   "dependencies": {

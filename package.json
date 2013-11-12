@@ -4,7 +4,7 @@
   "description": "Parse a Consolidate CDA clinical summary document into a simplified JSON structue",
   "author": "Josh Mandel <joshua.mandel@childrens.harvard.edu>",
   "scripts":{
-     "browserify": "browserify -r ./index.js -o browser-code/ccda-to-json.js; echo 'require.modules[\"/node_modules/ccda-to-json\"] = require.modules[\"/index.js\"];' >> browser-code/ccda-to-json.js"
+     "browserify": "browserify  -e index.js -s ParseCCDA  > browser-code/ccda-to-json.js"
   },
   "main": "index.js",
   "dependencies": {

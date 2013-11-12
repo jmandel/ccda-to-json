@@ -4,12 +4,9 @@
   </script>
   <script src="ccda-to-json.js"></script>
   <script>
-    var ccdaParser = require("ccda-to-json");
     $.get("example.xml").then(function(doc){
       var t0=new Date().getTime();
-      ccdaParser(doc, {
-        hideFields: ["_patient", "_id"]
-      },
+      ParseCCDA(doc, { hideFields: ["_patient", "_id"] },
       function(err, result){
         window.result = result;
         var js = result.toJSON();

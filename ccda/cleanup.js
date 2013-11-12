@@ -139,14 +139,14 @@ Cleanup.extractAllFields = function(flist){
 
 Cleanup.ensureMutuallyExclusive = function(ps){
   return function(){
-    var seen = {};
+    var seen = [];
     ps.forEach(function(p){
       var newps = [];
       this.js[p].forEach(function(v,i){
-        if (!seen[v.node]){
+        if (seen.indexOf(v.node) === -1){
           newps.push(v);
         }
-        seen[v.node] = true;
+        seen.push(v.node);
       }, this);
       this.js[p] = newps;
     }, this);

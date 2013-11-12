@@ -111,6 +111,7 @@
                use="L">
                <!-- L is "Legal" from HL7 EntityNameUse 2.16.840.1.113883.5.45 -->
                <given>Myra</given>
+               <given>B</given>
                <!-- CL is "Call me" from HL7 EntityNamePartQualifier 2.16.840.1.113883.5.43 -->
                <family>Jones</family>
             </name>

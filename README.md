@@ -22,9 +22,8 @@ npm run-script browserify
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js"></script>
   <script src="ccda-to-json.js"></script>
   <script>
-    var ccdaParser = require("ccda-to-json");
     $.get("example.xml").then(function(doc){
-      ccdaParser(doc, function(err, result){
+      ParseCCDA(doc, function(err, result){
         var js = result.toJSON();
         $("#result").text(JSON.stringify(js, null, " "));
       });
@@ -40,7 +39,8 @@ npm run-script browserify
  "demographics": {
   "name": {
    "givens": [
-    "Myra"
+    "Myra",
+    "B"
    ],
    "family": "Jones",
    "use": "Legal"
@@ -272,6 +272,28 @@ npm run-script browserify
      "uri": "http://www2a.cdc.gov/vaccines/iis/iisstandards/vaccines.asp?rpt=cvx&code=88"
     },
     "freeTextProductName": "Influenza virus vaccine"
+   },
+   {
+    "route": "Intramuscular injection",
+    "date": {
+     "point": "2012-04-01T00:00:00.000Z",
+     "pointResolution": "day"
+    },
+    "productName": {
+     "label": "Tetanus and diphtheria toxoids - preservative free",
+     "code": "103",
+     "systemName": "CVX Vaccine",
+     "translations": [
+      {
+       "label": "Tetanus and diphtheria toxoids - preservative free",
+       "code": "09",
+       "systemName": "CVX Vaccine",
+       "uri": "http://www2a.cdc.gov/vaccines/iis/iisstandards/vaccines.asp?rpt=cvx&code=09"
+      }
+     ],
+     "uri": "http://www2a.cdc.gov/vaccines/iis/iisstandards/vaccines.asp?rpt=cvx&code=103"
+    },
+    "freeTextProductName": "Tetanus and diphtheria toxoids - preservative free"
    }
   ]
  },
